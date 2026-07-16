@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import UploadPanel from './components/UploadPanel';
 import ChatPanel from './components/ChatPanel';
 
-const BACKEND = 'http://localhost:5000';
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 // ─── Logo SVG ────────────────────────────────────────────────────────────────
 const LogoIcon = () => (

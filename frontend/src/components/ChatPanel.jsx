@@ -16,7 +16,7 @@ const BookIcon = () => (
   </svg>
 );
 
-const BACKEND = 'http://localhost:5000';
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 export default function ChatPanel({ documentCount, onStreamingChange }) {
   const [chatHistory, setChatHistory] = useState([]);
