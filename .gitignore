@@ -1,3 +1,6 @@
 Project_standard.md
 studymate_implementation_plan.md
 StudyMate_PRD.md
+node_modules/
+.env
+.env.*
