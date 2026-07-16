@@ -16,7 +16,7 @@ const BookIcon = () => (
   </svg>
 );
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 export default function ChatPanel({ documentCount, onStreamingChange }) {
   const [chatHistory, setChatHistory] = useState([]);
@@ -68,7 +68,7 @@ export default function ChatPanel({ documentCount, onStreamingChange }) {
     setIsStreaming(true);
 
     try {
-      const res = await fetch(`${BACKEND}/api/chat/stream`, {
+      const res = await fetch(`${BACKEND_URL}/api/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text }),

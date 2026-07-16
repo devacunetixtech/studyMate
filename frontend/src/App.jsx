@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import UploadPanel from './components/UploadPanel';
 import ChatPanel from './components/ChatPanel';
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 // ─── Logo SVG ────────────────────────────────────────────────────────────────
 const LogoIcon = () => (
@@ -28,7 +28,7 @@ export default function App() {
     formData.append('file', file);
 
     try {
-      const res = await fetch(`${BACKEND}/api/upload`, {
+      const res = await fetch(`${BACKEND_URL}/api/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -55,7 +55,7 @@ export default function App() {
   // ── Clear Session ──────────────────────────────────────────────────────────
   const handleClearSession = useCallback(async () => {
     try {
-      await fetch(`${BACKEND}/api/session`, { method: 'DELETE' });
+      await fetch(`${BACKEND_URL}/api/session`, { method: 'DELETE' });
     } catch {
       // Best-effort — if backend is unreachable, clear frontend state anyway
     }
