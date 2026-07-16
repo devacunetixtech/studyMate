@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import UploadPanel from './components/UploadPanel';
 import ChatPanel from './components/ChatPanel';
+import LandingPage from './components/LandingPage';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -14,6 +15,27 @@ const LogoIcon = () => (
 );
 
 export default function App() {
+  const [view, setView] = useState(() => {
+    // Support deep-linking to /app vs landing page
+    const path = window.location.pathname;
+    return path === '/app' ? 'app' : 'landing';
+  });
+
+  const navigateTo = (newView) => {
+    setView(newView);
+    const newPath = newView === 'app' ? '/app' : '/';
+    window.history.pushState(null, '', newPath);
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      setView(path === '/app' ? 'app' : 'landing');
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   const [documents, setDocuments] = useState([]); // { id, name, summary }
   const [isUploading, setIsUploading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -63,6 +85,10 @@ export default function App() {
     setUploadError(null);
   }, []);
 
+  if (view === 'landing') {
+    return <LandingPage onStart={() => navigateTo('app')} />;
+  }
+
   const headerActive = isUploading || isStreaming;
 
   return (
@@ -70,10 +96,10 @@ export default function App() {
       {/* ── Header */}
       <header className="app-header" data-active={headerActive ? 'true' : 'false'}>
         <div className="shimmer-bar" />
-        <div className="app-header__logo">
+        <div className="app-header__logo" style={{ cursor: 'pointer' }} onClick={() => navigateTo('landing')}>
           <LogoIcon />
         </div>
-        <h1 className="app-header__title">StudyMate</h1>
+        <h1 className="app-header__title" style={{ cursor: 'pointer' }} onClick={() => navigateTo('landing')}>StudyMate</h1>
         <span className="app-header__subtitle">
           Powered by Gemma 4 · {documents.length} document{documents.length !== 1 ? 's' : ''} in session
         </span>
