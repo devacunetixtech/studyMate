@@ -46,33 +46,76 @@ export default function App() {
   }, []);
 
   const [documents, setDocuments]     = useState([]);
+  const [groups, setGroups]           = useState(['General']);
+  const [activeGroup, setActiveGroup] = useState('All');
   const [isUploading, setIsUploading] = useState(false);
   const [isStreaming, setIsStreaming]  = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [studyMode, setStudyMode]     = useState('chat');
   const [drawerOpen, setDrawerOpen]   = useState(false); // mobile upload drawer
 
-  // ── Upload Handler ─────────────────────────────────────────────────────────
-  const handleUpload = useCallback(async (file) => {
+  // Load session on mount
+  useEffect(() => {
+    const loadSession = async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/session`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.documents) {
+            setDocuments(data.documents);
+            // Reconstruct groups from documents
+            const loadedGroups = new Set(['General']);
+            data.documents.forEach(doc => {
+              if (doc.group) loadedGroups.add(doc.group);
+            });
+            setGroups(Array.from(loadedGroups));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load session:', err);
+      }
+    };
+    loadSession();
+  }, []);
+
+  // ── Upload Handler (processes arrays for Multi-File Upload) ───────────────
+  const handleUpload = useCallback(async (files, targetGroup = 'General') => {
     setIsUploading(true);
     setUploadError(null);
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/upload`, { method: 'POST', body: formData });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Upload failed' }));
-        setUploadError(err.error || 'Upload failed');
-        return;
+    const fileList = Array.isArray(files) ? files : [files];
+    for (const file of fileList) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('group', targetGroup);
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/upload`, { method: 'POST', body: formData });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Upload failed' }));
+          setUploadError(`${file.name}: ${err.error || 'Upload failed'}`);
+          continue;
+        }
+        const data = await res.json();
+        setDocuments(prev => [...prev, { id: data.docId, name: file.name, summary: data.summary, group: targetGroup }]);
+      } catch (err) {
+        console.error('Upload error:', err);
+        setUploadError(`Could not upload ${file.name}. Is the backend running?`);
       }
-      const data = await res.json();
-      setDocuments(prev => [...prev, { id: data.docId, name: file.name, summary: data.summary }]);
-      setDrawerOpen(false); // auto-close drawer on mobile after upload
+    }
+    setIsUploading(false);
+    setDrawerOpen(false); // auto-close drawer on mobile after upload queue completes
+  }, []);
+
+  // ── Move Document ──────────────────────────────────────────────────────────
+  const handleMoveDocument = useCallback(async (docId, targetGroup) => {
+    setDocuments(prev => prev.map(d => d.id === docId ? { ...d, group: targetGroup } : d));
+    try {
+      await fetch(`${BACKEND_URL}/api/documents/${docId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group: targetGroup }),
+      });
     } catch (err) {
-      console.error('Upload error:', err);
-      setUploadError('Could not reach the server. Is the backend running?');
-    } finally {
-      setIsUploading(false);
+      console.error('Failed to update document group on server:', err);
     }
   }, []);
 
@@ -80,6 +123,8 @@ export default function App() {
   const handleClearSession = useCallback(async () => {
     try { await fetch(`${BACKEND_URL}/api/session`, { method: 'DELETE' }); } catch { /* best-effort */ }
     setDocuments([]);
+    setGroups(['General']);
+    setActiveGroup('All');
     setUploadError(null);
   }, []);
 
@@ -181,6 +226,11 @@ export default function App() {
           <div className={`upload-drawer ${drawerOpen ? 'upload-drawer--open' : ''}`}>
             <UploadPanel
               documents={documents}
+              groups={groups}
+              activeGroup={activeGroup}
+              onSelectGroup={setActiveGroup}
+              onCreateGroup={(name) => setGroups(prev => [...prev, name])}
+              onMoveDocument={handleMoveDocument}
               onUpload={handleUpload}
               onClearSession={handleClearSession}
               isUploading={isUploading}
@@ -190,13 +240,13 @@ export default function App() {
           {/* ── Right panels — always mounted so state survives tab switches ── */}
           <div className="right-panel-host">
             <div className={studyMode === 'chat'       ? 'panel-slot' : 'panel-slot panel-slot--hidden'}>
-              <ChatPanel documentCount={documents.length} onStreamingChange={setIsStreaming} />
+              <ChatPanel documentCount={documents.length} onStreamingChange={setIsStreaming} activeGroup={activeGroup} />
             </div>
             <div className={studyMode === 'flashcards' ? 'panel-slot' : 'panel-slot panel-slot--hidden'}>
-              <FlashcardPanel documentCount={documents.length} />
+              <FlashcardPanel documentCount={documents.length} activeGroup={activeGroup} />
             </div>
             <div className={studyMode === 'quiz'       ? 'panel-slot' : 'panel-slot panel-slot--hidden'}>
-              <QuizPanel documentCount={documents.length} />
+              <QuizPanel documentCount={documents.length} activeGroup={activeGroup} />
             </div>
           </div>
 

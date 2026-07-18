@@ -11,7 +11,7 @@ const LETTER_COLOR = {
   D: 'var(--quiz-d)',
 };
 
-export default function QuizPanel({ documentCount }) {
+export default function QuizPanel({ documentCount, activeGroup }) {
   const [questions, setQuestions]   = useState([]);
   const [qIndex, setQIndex]         = useState(0);
   const [selected, setSelected]     = useState(null);   // 'A' | 'B' | 'C' | 'D' | null
@@ -32,7 +32,11 @@ export default function QuizPanel({ documentCount }) {
     setSelected(null);
     setRevealed(false);
     try {
-      const res  = await fetch(`${BACKEND_URL}/api/quiz`, { method: 'POST' });
+      const res  = await fetch(`${BACKEND_URL}/api/quiz`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group: activeGroup })
+      });
       const text = await res.text();
       let data;
       try {
@@ -90,7 +94,7 @@ export default function QuizPanel({ documentCount }) {
       <div className="panel-header">
         <div className="panel-header__left">
           <Brain size={15} className="panel-header__icon" />
-          <span>Quiz</span>
+          <span>Quiz {activeGroup && activeGroup !== 'All' ? `(${activeGroup})` : ''}</span>
           {questions.length > 0 && !done && (
             <span className="fc-badge">{questions.length} questions</span>
           )}
@@ -124,7 +128,7 @@ export default function QuizPanel({ documentCount }) {
             <p className="fc-empty__sub">
               {documentCount === 0
                 ? 'Upload a document first, then generate a quiz.'
-                : 'Hit Generate to create a 5-question multiple-choice quiz from your notes.'}
+                : `Hit Generate to create a 5-question multiple-choice quiz from your ${activeGroup === 'All' ? 'notes' : `"${activeGroup}" module`}.`}
             </p>
             {documentCount > 0 && (
               <motion.button

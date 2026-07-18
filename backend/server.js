@@ -68,7 +68,12 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', model: MODEL }));
 // ─── Session Info ──────────────────────────────────────────────────────────────
 app.get('/api/session', (_req, res) => {
   res.json({
-    documents: session.documents.map(d => ({ id: d.id, name: d.name })),
+    documents: session.documents.map(d => ({
+      id: d.id,
+      name: d.name,
+      summary: d.summary,
+      group: d.group || 'General'
+    })),
     cached: !!session.cacheName,
     totalDocuments: session.documents.length,
   });
@@ -343,7 +348,9 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     const file = req.file;
     if (!file) return res.status(400).json({ error: 'No file uploaded' });
 
-    console.log(`📄 Processing: ${file.originalname} (${file.mimetype}, ${(file.size / 1024).toFixed(1)} KB)`);
+    const group = req.body.group || 'General';
+
+    console.log(`📄 Processing: ${file.originalname} (${file.mimetype}, ${(file.size / 1024).toFixed(1)} KB) in group "${group}"`);
 
     let summary;
     let fullText = '';
@@ -430,6 +437,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       summary,
       fullText: fullText || summary,
       chunks: chunksList || [summary],
+      group,
     });
 
     console.log(`✅ Document added to session (total: ${session.documents.length})`);
@@ -449,10 +457,18 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 // ─── Non-Streaming Chat (fallback — kept permanently per PRD §5) ───────────────
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, group } = req.body;
     if (!message?.trim()) return res.status(400).json({ error: 'Message required' });
     if (session.documents.length === 0) {
       return res.status(400).json({ error: 'Please upload a study document first.' });
+    }
+
+    const filteredDocs = group && group !== 'All'
+      ? session.documents.filter(d => (d.group || 'General') === group)
+      : session.documents;
+
+    if (filteredDocs.length === 0) {
+      return res.status(400).json({ error: `Please upload a document to the "${group}" module first.` });
     }
 
     const config = {
@@ -461,7 +477,7 @@ app.post('/api/chat', async (req, res) => {
       temperature: 0.2,
     };
 
-    const combinedText = retrieveRelevantContext(message, session.documents);
+    const combinedText = retrieveRelevantContext(message, filteredDocs);
     const contents = [{ role: 'user', parts: [{ text: `${combinedText}\n\nQuestion: ${message}` }] }];
 
     const response = await ai.models.generateContent({ model: MODEL, contents, config });
@@ -472,7 +488,7 @@ app.post('/api/chat', async (req, res) => {
     res.json({
       reply: response.text,
       resources,
-      documentsUsed: session.documents.map(d => d.name),
+      documentsUsed: filteredDocs.map(d => d.name),
     });
   } catch (err) {
     console.error('❌ Chat error:', err);
@@ -483,12 +499,26 @@ app.post('/api/chat', async (req, res) => {
 // ─── Streaming Chat (SSE — primary UI path) ───────────────────────────────────
 app.post('/api/chat/stream', async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, group } = req.body;
     if (!message?.trim()) {
       return res.status(400).json({ error: 'Message required' });
     }
     if (session.documents.length === 0) {
       return res.status(400).json({ error: 'Please upload a study document first.' });
+    }
+
+    const filteredDocs = group && group !== 'All'
+      ? session.documents.filter(d => (d.group || 'General') === group)
+      : session.documents;
+
+    if (filteredDocs.length === 0) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
+      res.write(`data: ${JSON.stringify({ type: 'error', error: `Please upload a document to the "${group}" module first.` })}\n\n`);
+      res.end();
+      return;
     }
 
     res.setHeader('Content-Type', 'text/event-stream');
@@ -502,7 +532,7 @@ app.post('/api/chat/stream', async (req, res) => {
       temperature: 0.2,
     };
 
-    const combinedText = retrieveRelevantContext(message, session.documents);
+    const combinedText = retrieveRelevantContext(message, filteredDocs);
     const contents = [{ role: 'user', parts: [{ text: `${combinedText}\n\nQuestion: ${message}` }] }];
 
     const stream = await ai.models.generateContentStream({ model: MODEL, contents, config });
@@ -524,7 +554,7 @@ app.post('/api/chat/stream', async (req, res) => {
     res.write(`data: ${JSON.stringify({
       type: 'done',
       resources,
-      documentsUsed: session.documents.map(d => d.name),
+      documentsUsed: filteredDocs.map(d => d.name),
     })}\n\n`);
     res.end();
   } catch (err) {
@@ -534,16 +564,38 @@ app.post('/api/chat/stream', async (req, res) => {
   }
 });
 
+// ─── Update Document Metadata (PATCH) ────────────────────────────────────────
+app.patch('/api/documents/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { group } = req.body;
+    const doc = session.documents.find(d => d.id === id);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+    doc.group = group || 'General';
+    console.log(`📂 Document "${doc.name}" moved to group "${doc.group}"`);
+    await refreshSessionCache();
+    res.json({ success: true, doc });
+  } catch (err) {
+    console.error('❌ Document PATCH error:', err);
+    res.status(500).json({ error: 'Failed to update document group', detail: err.message });
+  }
+});
+
 // ─── Flashcard Generator ──────────────────────────────────────────────────────
 // Builds 10 Q&A flashcard pairs from all session document summaries.
 // Returns a JSON array: [{ front, back }]
 app.post('/api/flashcards', async (req, res) => {
   try {
-    if (session.documents.length === 0) {
-      return res.status(400).json({ error: 'Please upload a study document first.' });
+    const { group } = req.body;
+    const filteredDocs = group && group !== 'All'
+      ? session.documents.filter(d => (d.group || 'General') === group)
+      : session.documents;
+
+    if (filteredDocs.length === 0) {
+      return res.status(400).json({ error: `Please upload a study document to the "${group || 'General'}" module first.` });
     }
 
-    const context = session.documents
+    const context = filteredDocs
       .map(d => `--- ${d.name} ---\n${d.summary}`)
       .join('\n\n');
 
@@ -590,11 +642,16 @@ ${context}`;
 // Returns a JSON array: [{ question, options, answer, explanation }]
 app.post('/api/quiz', async (req, res) => {
   try {
-    if (session.documents.length === 0) {
-      return res.status(400).json({ error: 'Please upload a study document first.' });
+    const { group } = req.body;
+    const filteredDocs = group && group !== 'All'
+      ? session.documents.filter(d => (d.group || 'General') === group)
+      : session.documents;
+
+    if (filteredDocs.length === 0) {
+      return res.status(400).json({ error: `Please upload a study document to the "${group || 'General'}" module first.` });
     }
 
-    const context = session.documents
+    const context = filteredDocs
       .map(d => `--- ${d.name} ---\n${d.summary}`)
       .join('\n\n');
 

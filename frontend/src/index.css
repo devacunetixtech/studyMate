@@ -2255,3 +2255,174 @@ a:hover {
   flex: 1;
   min-height: 0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Syllabus Modules Sidebar Navigation
+───────────────────────────────────────────────────────────────────────────── */
+.modules-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.modules-nav__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+}
+
+.modules-nav__title {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.modules-nav__add-btn {
+  padding: 4px;
+  border-radius: 50%;
+  color: var(--muted);
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.modules-nav__add-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.modules-nav__add-form {
+  display: flex;
+  gap: 8px;
+  padding: 2px 4px;
+  overflow: hidden;
+}
+
+.modules-nav__add-form input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 0.78rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.modules-nav__add-form input:focus {
+  border-color: var(--border-hover);
+}
+
+.modules-nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.modules-nav__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.modules-nav__item:hover {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+}
+
+.modules-nav__item--active {
+  background: rgba(212, 175, 55, 0.04);
+  border-color: rgba(212, 175, 55, 0.2);
+  color: var(--accent-gold) !important;
+}
+
+.modules-nav__item-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 8px;
+}
+
+.modules-nav__item-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.modules-nav__item--active .modules-nav__item-badge {
+  background: rgba(212, 175, 55, 0.08);
+  border-color: rgba(212, 175, 55, 0.25);
+  color: var(--accent-gold);
+}
+
+/* Light mode overrides for syllabus navigation */
+[data-theme="light"] .modules-nav__item--active {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+/* ─── Document Item Group Select ────────────────────────────────────────────── */
+.doc-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.doc-item__group-mover {
+  display: flex;
+  align-items: center;
+}
+
+.doc-item__group-mover select {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  border-radius: 4px;
+  padding: 3px 6px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+  max-width: 90px;
+}
+
+.doc-item__group-mover select:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .doc-item__group-mover select {
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--text);
+}
+[data-theme="light"] .doc-item__group-mover select:hover {
+  background: #fff;
+}
+
+/* Hide fallback label when activeGroup matches */
+.doc-item__listen {
+  padding: 6px !important;
+}
+

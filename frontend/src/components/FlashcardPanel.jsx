@@ -4,7 +4,7 @@ import { Sparkles, ChevronLeft, ChevronRight, Shuffle, Download, RotateCcw, Load
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
-export default function FlashcardPanel({ documentCount }) {
+export default function FlashcardPanel({ documentCount, activeGroup }) {
   const [cards, setCards]         = useState([]);
   const [index, setIndex]         = useState(0);
   const [flipped, setFlipped]     = useState(false);
@@ -28,7 +28,11 @@ export default function FlashcardPanel({ documentCount }) {
     setError(null);
     setGenerated(false);
     try {
-      const res  = await fetch(`${BACKEND_URL}/api/flashcards`, { method: 'POST' });
+      const res  = await fetch(`${BACKEND_URL}/api/flashcards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group: activeGroup })
+      });
       const text = await res.text();
       let data;
       try {
@@ -85,7 +89,7 @@ export default function FlashcardPanel({ documentCount }) {
       <div className="panel-header">
         <div className="panel-header__left">
           <Sparkles size={15} className="panel-header__icon" />
-          <span>Flashcards</span>
+          <span>Flashcards {activeGroup && activeGroup !== 'All' ? `(${activeGroup})` : ''}</span>
           {cards.length > 0 && (
             <span className="fc-badge">{cards.length} cards</span>
           )}
@@ -141,7 +145,7 @@ export default function FlashcardPanel({ documentCount }) {
             <p className="fc-empty__sub">
               {documentCount === 0
                 ? 'Upload a document first, then generate flashcards.'
-                : 'Hit Generate to create 10 exam-ready flashcards from your notes.'}
+                : `Hit Generate to create 10 exam-ready flashcards from your ${activeGroup === 'All' ? 'notes' : `"${activeGroup}" module`}.`}
             </p>
             {documentCount > 0 && (
               <motion.button

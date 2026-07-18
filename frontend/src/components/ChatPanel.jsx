@@ -6,7 +6,7 @@ import VoiceButton from './VoiceButton';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
-export default function ChatPanel({ documentCount, onStreamingChange }) {
+export default function ChatPanel({ documentCount, onStreamingChange, activeGroup }) {
   const [chatHistory, setChatHistory] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -59,7 +59,7 @@ export default function ChatPanel({ documentCount, onStreamingChange }) {
       const res = await fetch(`${BACKEND_URL}/api/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, group: activeGroup }),
       });
 
       if (!res.ok) {
@@ -215,7 +215,9 @@ export default function ChatPanel({ documentCount, onStreamingChange }) {
 
       {/* ── Panel Header */}
       <div style={{ padding: '20px 28px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div className="section-heading">Study Chat</div>
+        <div className="section-heading">
+          Study Chat {activeGroup && activeGroup !== 'All' ? `(${activeGroup})` : ''}
+        </div>
         {chatHistory.length > 0 && (
           <motion.button
             className="btn btn--ghost"
