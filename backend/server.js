@@ -275,8 +275,8 @@ function getRetryDelay(err) {
   return null;
 }
 
-// Wraps an async fn with exponential backoff retry on 429 (rate limit)
-// and 503 (model overloaded / UNAVAILABLE) errors.
+// Wraps an async fn with exponential backoff retry on 429 (rate limit),
+// 503 (model overloaded), and transient network errors (ECONNRESET, fetch failed).
 async function retryWithBackoff(fn, maxRetries = 5) {
   let delay = 10_000; // base delay when no hint is present
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -288,17 +288,25 @@ async function retryWithBackoff(fn, maxRetries = 5) {
       const is503 = err.status === 503
         || err.message?.includes('UNAVAILABLE')
         || err.message?.includes('high demand');
+      // Transient network drop — TLS reset before connection established
+      const isNetwork = err.code === 'ECONNRESET'
+        || err.cause?.code === 'ECONNRESET'
+        || err.message?.includes('fetch failed')
+        || err.message?.includes('socket disconnected');
 
-      const isRetryable = is429 || is503;
+      const isRetryable = is429 || is503 || isNetwork;
       if (!isRetryable || attempt === maxRetries) throw err;
 
       // For 429: use the API's own retryDelay hint when available.
       // For 503: wait longer — model capacity issues need more recovery time.
+      // For network errors: short fixed delay, then exponential.
       const hinted = is429 ? getRetryDelay(err) : null;
-      const base = is503 ? 20_000 : delay;   // 503 → start at 20s
+      const base = is503 ? 20_000 : isNetwork ? 5_000 : delay;
       const wait = hinted ?? base;
 
-      const reason = is429 ? 'Rate limited' : 'Model overloaded (503)';
+      const reason = is429 ? 'Rate limited'
+                   : is503 ? 'Model overloaded (503)'
+                   : `Network error (${err.code || err.cause?.code || 'ECONNRESET'})`;
       console.warn(`   ⏳ ${reason} (attempt ${attempt}/${maxRetries}) — waiting ${(wait / 1000).toFixed(1)}s…`);
       await new Promise(r => setTimeout(r, wait + 500));
       delay = Math.min(delay * 2, 60_000); // exponential, cap at 60s
@@ -523,6 +531,108 @@ app.post('/api/chat/stream', async (req, res) => {
     console.error('❌ Stream chat error:', err);
     res.write(`data: ${JSON.stringify({ type: 'error', error: 'Internal server error' })}\n\n`);
     res.end();
+  }
+});
+
+// ─── Flashcard Generator ──────────────────────────────────────────────────────
+// Builds 10 Q&A flashcard pairs from all session document summaries.
+// Returns a JSON array: [{ front, back }]
+app.post('/api/flashcards', async (req, res) => {
+  try {
+    if (session.documents.length === 0) {
+      return res.status(400).json({ error: 'Please upload a study document first.' });
+    }
+
+    const context = session.documents
+      .map(d => `--- ${d.name} ---\n${d.summary}`)
+      .join('\n\n');
+
+    const prompt = `Based on the following study material, generate exactly 10 high-quality exam flashcards.
+Return a JSON array: [{"front": "Question or concept term", "back": "Concise answer or definition (1-3 sentences max)"}]
+
+Rules:
+- Front should be a clear, testable question or key term.
+- Back should be the direct, exam-ready answer — no padding.
+- Cover a spread of topics from across the material.
+
+Study Material:
+${context}`;
+
+    const response = await retryWithBackoff(() =>
+      ai.models.generateContent({
+        model: MODEL,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: {
+          systemInstruction: "You are an expert exam study helper. Generate raw JSON matching the requested format.",
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        },
+      })
+    );
+
+    const raw = response.text.trim();
+    const flashcards = JSON.parse(raw);
+    
+    // Support nested arrays or direct arrays depending on how the JSON is output
+    const list = Array.isArray(flashcards) ? flashcards : (flashcards.flashcards || []);
+    if (!Array.isArray(list)) throw new Error('Response is not an array');
+
+    console.log(`✅ Generated ${list.length} flashcards`);
+    res.json({ flashcards: list });
+  } catch (err) {
+    console.error('❌ Flashcard error:', err);
+    res.status(500).json({ error: 'Failed to generate flashcards', detail: err.message });
+  }
+});
+
+// ─── Quiz Generator ──────────────────────────────────────────────────────────
+// Generates a 5-question multiple-choice quiz from session document summaries.
+// Returns a JSON array: [{ question, options, answer, explanation }]
+app.post('/api/quiz', async (req, res) => {
+  try {
+    if (session.documents.length === 0) {
+      return res.status(400).json({ error: 'Please upload a study document first.' });
+    }
+
+    const context = session.documents
+      .map(d => `--- ${d.name} ---\n${d.summary}`)
+      .join('\n\n');
+
+    const prompt = `Based on the following study material, generate exactly 5 multiple-choice quiz questions.
+Return a JSON array: [{"question": "...", "options": ["A) ...", "B) ...", "C) ...", "D) ..."], "answer": "A", "explanation": "Brief explanation citing the material."}]
+
+Rules:
+- Each question must have exactly 4 options labeled A through D.
+- The "answer" field must be exactly one letter: "A", "B", "C", or "D".
+- Questions should test understanding, not just memorization.
+- Cover different sections of the material.
+
+Study Material:
+${context}`;
+
+    const response = await retryWithBackoff(() =>
+      ai.models.generateContent({
+        model: MODEL,
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: {
+          systemInstruction: "You are an expert exam study helper. Generate raw JSON matching the requested format.",
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        },
+      })
+    );
+
+    const raw = response.text.trim();
+    const questions = JSON.parse(raw);
+    
+    const list = Array.isArray(questions) ? questions : (questions.questions || []);
+    if (!Array.isArray(list)) throw new Error('Response is not an array');
+
+    console.log(`✅ Generated ${list.length} quiz questions`);
+    res.json({ questions: list });
+  } catch (err) {
+    console.error('❌ Quiz error:', err);
+    res.status(500).json({ error: 'Failed to generate quiz', detail: err.message });
   }
 });
 

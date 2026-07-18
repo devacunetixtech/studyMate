@@ -310,7 +310,7 @@ export default function ChatPanel({ documentCount, onStreamingChange }) {
           value={chatInput}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder={noDoc ? 'Upload a document first…' : 'Ask a question… (Enter to send, Shift+Enter for newline)'}
+          placeholder={noDoc ? 'Upload a document first…' : 'Ask a question… '}
           disabled={isStreaming || noDoc}
           rows={1}
           aria-label="Chat input"
