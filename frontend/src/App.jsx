@@ -1,18 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { BookOpen, AlertCircle, X, Sun, Moon } from 'lucide-react';
 import UploadPanel from './components/UploadPanel';
 import ChatPanel from './components/ChatPanel';
 import LandingPage from './components/LandingPage';
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
-
-// ─── Logo SVG ────────────────────────────────────────────────────────────────
-const LogoIcon = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-    <path d="M2 17l10 5 10-5"/>
-    <path d="M2 12l10 5 10-5"/>
-  </svg>
-);
 
 export default function App() {
   const [view, setView] = useState(() => {
@@ -20,6 +13,19 @@ export default function App() {
     const path = window.location.pathname;
     return path === '/app' ? 'app' : 'landing';
   });
+
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('studymate-theme') || 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('studymate-theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   const navigateTo = (newView) => {
     setView(newView);
@@ -85,64 +91,112 @@ export default function App() {
     setUploadError(null);
   }, []);
 
-  if (view === 'landing') {
-    return <LandingPage onStart={() => navigateTo('app')} />;
-  }
-
   const headerActive = isUploading || isStreaming;
 
   return (
-    <div className="app-shell">
-      {/* ── Header */}
-      <header className="app-header" data-active={headerActive ? 'true' : 'false'}>
-        <div className="shimmer-bar" />
-        <div className="app-header__logo" style={{ cursor: 'pointer' }} onClick={() => navigateTo('landing')}>
-          <LogoIcon />
-        </div>
-        <h1 className="app-header__title" style={{ cursor: 'pointer' }} onClick={() => navigateTo('landing')}>StudyMate</h1>
-        <span className="app-header__subtitle">
-          Powered by Gemma 4 · {documents.length} document{documents.length !== 1 ? 's' : ''} in session
-        </span>
-      </header>
-
-      {/* ── Upload Panel (left) */}
-      <UploadPanel
-        documents={documents}
-        onUpload={handleUpload}
-        onClearSession={handleClearSession}
-        isUploading={isUploading}
-      />
-
-      {/* ── Chat Panel (right) */}
-      <ChatPanel
-        documentCount={documents.length}
-        onStreamingChange={setIsStreaming}
-      />
-
-      {/* ── Upload Error Toast */}
-      {uploadError && (
-        <div
-          role="alert"
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: '#2E2419',
-            color: '#F6F1E7',
-            padding: '10px 20px',
-            borderRadius: 'var(--radius-md)',
-            fontSize: '0.82rem',
-            zIndex: 100,
-            maxWidth: 380,
-            textAlign: 'center',
-            cursor: 'pointer',
-          }}
-          onClick={() => setUploadError(null)}
+    <AnimatePresence mode="wait">
+      {view === 'landing' ? (
+        <motion.div
+          key="landing"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.35, ease: 'easeInOut' }}
+          style={{ width: '100%', height: '100%' }}
         >
-          ⚠️ {uploadError} <span style={{ opacity: 0.6, marginLeft: 8 }}>✕</span>
-        </div>
+          <LandingPage onStart={() => navigateTo('app')} theme={theme} toggleTheme={toggleTheme} />
+        </motion.div>
+      ) : (
+        <motion.div
+          key="app"
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+          className="app-shell"
+        >
+          {/* ── Header */}
+          <header className="app-header" data-active={headerActive ? 'true' : 'false'}>
+            <div className="shimmer-bar" />
+            <motion.div 
+              className="app-header__logo" 
+              style={{ cursor: 'pointer' }} 
+              onClick={() => navigateTo('landing')}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <BookOpen size={16} />
+            </motion.div>
+            <h1 className="app-header__title" style={{ cursor: 'pointer' }} onClick={() => navigateTo('landing')}>
+              StudyMate
+            </h1>
+            <span className="app-header__subtitle">
+              Powered by Gemma 4 · {documents.length} document{documents.length !== 1 ? 's' : ''} in session
+            </span>
+            <motion.button
+              className="btn btn--icon"
+              onClick={toggleTheme}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              style={{ borderRadius: '50%', padding: '6px', marginLeft: '12px', flexShrink: 0 }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+            </motion.button>
+          </header>
+
+          {/* ── Upload Panel (left) */}
+          <UploadPanel
+            documents={documents}
+            onUpload={handleUpload}
+            onClearSession={handleClearSession}
+            isUploading={isUploading}
+          />
+
+          {/* ── Chat Panel (right) */}
+          <ChatPanel
+            documentCount={documents.length}
+            onStreamingChange={setIsStreaming}
+          />
+
+          {/* ── Upload Error Toast */}
+          <AnimatePresence>
+            {uploadError && (
+              <motion.div
+                role="alert"
+                initial={{ opacity: 0, y: 20, x: '-50%' }}
+                animate={{ opacity: 1, y: 0, x: '-50%' }}
+                exit={{ opacity: 0, y: 15, x: '-50%' }}
+                style={{
+                  position: 'fixed',
+                  bottom: 24,
+                  left: '50%',
+                  background: '#27272a',
+                  border: '1px solid #3f3f46',
+                  color: '#f4f4f5',
+                  padding: '12px 20px',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.85rem',
+                  zIndex: 100,
+                  maxWidth: 380,
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.3)',
+                }}
+                onClick={() => setUploadError(null)}
+              >
+                <AlertCircle size={15} style={{ color: '#f59e0b', flexShrink: 0 }} />
+                <span>{uploadError}</span>
+                <X size={14} style={{ opacity: 0.5, marginLeft: 'auto', flexShrink: 0 }} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
       )}
-    </div>
+    </AnimatePresence>
   );
 }
