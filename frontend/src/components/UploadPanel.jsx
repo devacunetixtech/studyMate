@@ -1,12 +1,14 @@
 import { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UploadCloud, FileText, Volume2, Square, Trash2, BookOpen } from 'lucide-react';
+import { UploadCloud, FileText, Volume2, Square, Trash2, BookOpen, Search, Sliders, ChevronDown, ChevronUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 export default function UploadPanel({ documents, onUpload, onClearSession, isUploading }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [speakingId, setSpeakingId] = useState(null); // which doc is being spoken
-  const [expandedDoc, setExpandedDoc] = useState(null);
+  const [expandedDocs, setExpandedDocs] = useState({}); // { [docId]: boolean }
+  const [searchTerm, setSearchTerm] = useState('');
+  const [playbackRate, setPlaybackRate] = useState(1);
   const fileInputRef = useRef(null);
 
   // ── Drag & Drop ─────────────────────────────────────────────────────────
@@ -30,7 +32,7 @@ export default function UploadPanel({ documents, onUpload, onClearSession, isUpl
     e.target.value = ''; // reset so same file can be re-picked
   };
 
-  // ── Voice Playback ──────────────────────────────────────────────────────
+  // ── Voice Playback with Speed Rate ──────────────────────────────────────
   const handleListen = (doc) => {
     if (speakingId === doc.id) {
       window.speechSynthesis.cancel();
@@ -39,18 +41,58 @@ export default function UploadPanel({ documents, onUpload, onClearSession, isUpl
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(doc.summary.replace(/[#*`\-]/g, ''));
+    utterance.rate = playbackRate;
     utterance.onend = () => setSpeakingId(null);
     utterance.onerror = () => setSpeakingId(null);
     setSpeakingId(doc.id);
     window.speechSynthesis.speak(utterance);
   };
 
-  // ── Clear Session ───────────────────────────────────────────────────────
+  const cycleSpeed = () => {
+    setPlaybackRate(prev => {
+      if (prev === 1) return 1.25;
+      if (prev === 1.25) return 1.5;
+      return 1;
+    });
+    // Stop current speech when rate changes
+    if (speakingId) {
+      window.speechSynthesis.cancel();
+      setSpeakingId(null);
+    }
+  };
+
+  // ── Expand/Collapse Summaries ───────────────────────────────────────────
+  const toggleExpandDoc = (docId) => {
+    setExpandedDocs(prev => ({
+      ...prev,
+      [docId]: !prev[docId]
+    }));
+  };
+
   const handleClear = () => {
     window.speechSynthesis.cancel();
     setSpeakingId(null);
-    setExpandedDoc(null);
+    setExpandedDocs({});
     onClearSession();
+  };
+
+  // ── Filters & Computed ──────────────────────────────────────────────────
+  const filteredDocs = documents.filter(doc =>
+    doc.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const allExpanded = filteredDocs.length > 0 && filteredDocs.every(doc => expandedDocs[doc.id]);
+
+  const toggleExpandAll = () => {
+    if (allExpanded) {
+      setExpandedDocs({});
+    } else {
+      const next = {};
+      filteredDocs.forEach(doc => {
+        next[doc.id] = true;
+      });
+      setExpandedDocs(next);
+    }
   };
 
   return (
@@ -124,14 +166,62 @@ export default function UploadPanel({ documents, onUpload, onClearSession, isUpl
           )}
         </motion.div>
 
+        {/* ── Filter Input Bar (Visible if documents exist) */}
+        {documents.length > 0 && (
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Search size={14} style={{ position: 'absolute', left: 12, color: 'var(--muted)', pointerEvents: 'none' }} />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search uploaded files…"
+              style={{
+                width: '100%',
+                padding: '9px 12px 9px 34px',
+                fontSize: '0.82rem',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid var(--border)',
+                outline: 'none',
+                color: 'var(--text)'
+              }}
+              aria-label="Search documents"
+            />
+          </div>
+        )}
+
         {/* ── Document List */}
         {documents.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div className="section-heading">Uploaded</div>
+            {/* Header controls */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div className="section-heading">Uploaded</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  className="btn btn--ghost"
+                  onClick={toggleExpandAll}
+                  style={{ fontSize: '0.7rem', padding: '4px 8px', gap: '3px', borderRadius: '4px' }}
+                  title={allExpanded ? "Collapse all summaries" : "Expand all summaries"}
+                >
+                  {allExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                  <span>{allExpanded ? 'Collapse All' : 'Expand All'}</span>
+                </button>
+                <button
+                  className="btn btn--ghost"
+                  onClick={cycleSpeed}
+                  style={{ fontSize: '0.7rem', padding: '4px 8px', gap: '3px', borderRadius: '4px' }}
+                  title="Cycle listening speed"
+                >
+                  <Sliders size={11} />
+                  <span>{playbackRate}x</span>
+                </button>
+              </div>
+            </div>
+
             <div className="doc-list">
               <AnimatePresence initial={false}>
-                {documents.map((doc, idx) => {
-                  const isExpanded = expandedDoc === doc.id;
+                {filteredDocs.map((doc, idx) => {
+                  const isExpanded = !!expandedDocs[doc.id];
                   const isSpeaking = speakingId === doc.id;
                   return (
                     <motion.div
@@ -149,7 +239,7 @@ export default function UploadPanel({ documents, onUpload, onClearSession, isUpl
                         <div
                           className="doc-item__name"
                           style={{ cursor: 'pointer' }}
-                          onClick={() => setExpandedDoc(isExpanded ? null : doc.id)}
+                          onClick={() => toggleExpandDoc(doc.id)}
                           title={doc.name}
                         >
                           {idx + 1}. {doc.name}
@@ -185,6 +275,13 @@ export default function UploadPanel({ documents, onUpload, onClearSession, isUpl
                   );
                 })}
               </AnimatePresence>
+
+              {/* No match indicator */}
+              {filteredDocs.length === 0 && (
+                <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: '0.8rem', padding: '16px 0' }}>
+                  No matches found for "{searchTerm}"
+                </div>
+              )}
             </div>
           </div>
         )}

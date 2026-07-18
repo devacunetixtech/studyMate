@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SendHorizontal, BookOpen, Sparkles } from 'lucide-react';
+import { SendHorizontal, BookOpen, Sparkles, Download } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import VoiceButton from './VoiceButton';
 
@@ -174,6 +174,37 @@ export default function ChatPanel({ documentCount, onStreamingChange }) {
     textareaRef.current?.focus();
   }, []);
 
+  // ── Export Chat as Markdown ───────────────────────────────────────────────
+  const handleExportChat = () => {
+    if (chatHistory.length === 0) return;
+
+    let content = `# StudyMate Chat Notes\n*Exported on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}*\n\n---\n\n`;
+
+    chatHistory.forEach((msg) => {
+      const sender = msg.sender === 'user' ? 'Student' : 'StudyMate';
+      content += `### 💬 ${sender}\n${msg.text}\n\n`;
+
+      if (msg.resources?.length > 0) {
+        content += `**Further Reading References:**\n`;
+        msg.resources.forEach((res) => {
+          content += `- [${res.title || res.url}](${res.url})\n`;
+        });
+        content += `\n`;
+      }
+      
+      content += `---\n\n`;
+    });
+
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `studymate-notes-${Date.now()}.md`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // ── Empty state ───────────────────────────────────────────────────────────
   const isEmpty = chatHistory.length === 0;
   const noDoc = documentCount === 0;
@@ -181,6 +212,24 @@ export default function ChatPanel({ documentCount, onStreamingChange }) {
   return (
     <div className="panel panel--right" data-active={isStreaming ? 'true' : 'false'}>
       <div className="shimmer-bar" />
+
+      {/* ── Panel Header */}
+      <div style={{ padding: '20px 28px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="section-heading">Study Chat</div>
+        {chatHistory.length > 0 && (
+          <motion.button
+            className="btn btn--ghost"
+            onClick={handleExportChat}
+            title="Export session as Markdown notes"
+            style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '6px', borderRadius: '6px' }}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            <Download size={13} />
+            <span>Export Notes</span>
+          </motion.button>
+        )}
+      </div>
 
       {/* ── Message Thread */}
       <div className="chat-messages" id="chat-messages">

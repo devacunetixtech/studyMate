@@ -951,16 +951,68 @@ a:hover {
 
 .landing-hero {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
   align-items: center;
-  text-align: center;
-  padding: 100px 24px 80px;
-  max-width: 900px;
+  gap: 56px;
+  padding: 100px 48px 80px;
+  max-width: 1200px;
   margin: 0 auto;
-  gap: 28px;
   z-index: 10;
   position: relative;
+}
+
+.landing-hero__content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 24px;
+}
+
+.hero-preview-stack {
+  position: relative;
+  width: 100%;
+  height: 380px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-card {
+  position: absolute;
+  width: 290px;
+  padding: 20px;
+  background: rgba(24, 24, 27, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  cursor: grab;
+  user-select: none;
+}
+
+.preview-card:active {
+  cursor: grabbing;
+}
+
+.preview-card--summary {
+  top: 15px;
+  left: 10px;
+  z-index: 3;
+}
+
+.preview-card--chat {
+  bottom: 25px;
+  right: 10px;
+  z-index: 4;
+}
+
+[data-theme="light"] .preview-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(9, 9, 11, 0.05);
+  box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.05);
 }
 
 .landing-hero__badge {
@@ -1108,12 +1160,34 @@ a:hover {
   position: relative;
 }
 
+@media (max-width: 900px) {
+  .landing-hero {
+    grid-template-columns: 1fr;
+    text-align: center;
+    padding: 60px 24px;
+    gap: 48px;
+  }
+  .landing-hero__content {
+    align-items: center;
+    text-align: center;
+  }
+  .hero-preview-stack {
+    height: 350px;
+  }
+  .preview-card--summary {
+    left: 8%;
+  }
+  .preview-card--chat {
+    right: 8%;
+  }
+}
+
 @media (max-width: 768px) {
   .landing-nav {
     padding: 20px 24px;
   }
   .landing-hero {
-    padding: 60px 20px;
+    padding: 50px 20px 40px;
   }
   .landing-hero__title {
     font-size: 2.6rem;
